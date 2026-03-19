@@ -124,30 +124,43 @@ app.post("/ai/build-team", async (req, res) => {
       return res.status(400).json({ error: "Idea is required" });
     }
 
-    const prompt = `
-Build a hackathon team for this idea: ${idea}
+    let result;
 
-Give:
-1. Team roles
-2. Skills required
-3. Suggested team structure
-4. A short intro message to invite teammates
-`;
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "user",
+            content: `Build a hackathon team for this idea: ${idea}`,
+          },
+        ],
+      });
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [{ role: "user", content: prompt }],
-    });
+      result = response.choices[0].message.content;
 
-    const result = response.choices[0].message.content;
+    } catch (err) {
+      console.log("AI failed, using fallback");
+
+      // 🔥 FALLBACK RESPONSE
+      result = `
+Team Roles:
+- Frontend Developer (React)
+- Backend Developer (Node.js)
+- UI/UX Designer
+
+Suggested Structure:
+3–4 members working collaboratively
+
+Intro Message:
+"Hi! I'm building a project on ${idea}. Looking for teammates skilled in frontend, backend, and design. Let's collaborate and build something amazing!"
+      `;
+    }
 
     res.json({ result });
+
   } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      error: "AI failed",
-      details: error.message,
-    });
+    res.status(500).json({ error: error.message });
   }
 });
 
