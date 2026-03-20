@@ -468,3 +468,9 @@ body {
   font-size: 12px;
   padding: 40px 0 20px;
 }
+
+.error-msg { color: #e94560; font-size: 13px; margin-top: 10px; }
+.success-msg { color: #2ecc71; font-size: 13px; margin-top: 10px; }
+.empty { color: #555; text-align: center; padding: 40px; font-size: 15px; }
+.result-box { margin-top: 24px; background: #16213e; border-radius: 14px; padding: 20px; border: 1px solid #0f3460; }
+.ai-result { color: #ccc; font-size: 14px; line-height: 1.8; white-space: pre-wrap; }

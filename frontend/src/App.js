@@ -1,15 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './App.css';
+
+const API = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 const SKILLS = ['React', 'Node.js', 'Python', 'ML/AI', 'Flutter', 'UI/UX', 'Backend', 'DevOps'];
 
-const PROJECTS = [
-  { id: 1, title: 'Fintech App', skills: 'React, Node.js', members: 2, slots: 4, owner: 'Priya S.' },
-  { id: 2, title: 'AI Chatbot', skills: 'Python, ML/AI', members: 1, slots: 4, owner: 'Rahul M.' },
-  { id: 3, title: 'Health Tracker', skills: 'Flutter, Backend', members: 3, slots: 4, owner: 'Sneha K.' },
-];
-
-// ─── HOME ───────────────────────────────────────────
+// ─── HOME ────────────────────────────────────────────
 function Home({ setPage }) {
   return (
     <div className="page home">
@@ -31,10 +27,17 @@ function Home({ setPage }) {
             <div className="card-sub">Find teams looking for you</div>
           </div>
         </div>
+        <div className="home-card" onClick={() => setPage('match')}>
+          <span className="card-icon">🎯</span>
+          <div>
+            <div className="card-title">Skill Match</div>
+            <div className="card-sub">Find projects matching your skills</div>
+          </div>
+        </div>
         <div className="home-card accent" onClick={() => setPage('ai')}>
           <span className="card-icon">🤖</span>
           <div>
-            <div className="card-title">AI Team Match</div>
+            <div className="card-title">AI Team Builder</div>
             <div className="card-sub">Let AI build your team</div>
           </div>
         </div>
@@ -43,36 +46,57 @@ function Home({ setPage }) {
   );
 }
 
-// ─── PROFILE ────────────────────────────────────────
+// ─── PROFILE ─────────────────────────────────────────
 function Profile() {
   const [name, setName] = useState('');
-  const [role, setRole] = useState('');
+  const [availability, setAvailability] = useState('');
   const [selectedSkills, setSelectedSkills] = useState([]);
-  const [saved, setSaved] = useState(false);
+  const [status, setStatus] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const toggleSkill = (skill) =>
     setSelectedSkills(prev =>
       prev.includes(skill) ? prev.filter(s => s !== skill) : [...prev, skill]
     );
 
-  const handleSave = () => {
-    if (!name.trim()) return alert('Please enter your name!');
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+  const handleSave = async () => {
+    if (!name.trim() || !availability.trim() || selectedSkills.length === 0) {
+      setStatus('error');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/createUser`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, skills: selectedSkills, availability }),
+      });
+      const data = await res.json();
+      if (data.id) {
+        setStatus('saved');
+        setName(''); setAvailability(''); setSelectedSkills([]);
+        setTimeout(() => setStatus(''), 3000);
+      } else {
+        setStatus('error');
+      }
+    } catch {
+      setStatus('error');
+    }
+    setLoading(false);
   };
 
   return (
     <div className="page">
       <h2 className="page-title">My Profile</h2>
-      <p className="page-sub">Tell us about yourself</p>
+      <p className="page-sub">Create your profile to join projects</p>
 
       <label className="label">Full Name</label>
       <input className="input" placeholder="e.g. Arjun Kumar" value={name} onChange={e => setName(e.target.value)} />
 
-      <label className="label">Role / Title</label>
-      <input className="input" placeholder="e.g. Full Stack Developer" value={role} onChange={e => setRole(e.target.value)} />
+      <label className="label">Availability</label>
+      <input className="input" placeholder="e.g. Weekends, Full-time" value={availability} onChange={e => setAvailability(e.target.value)} />
 
-      <label className="label">Skills</label>
+      <label className="label">Skills (select all that apply)</label>
       <div className="skill-grid">
         {SKILLS.map(skill => (
           <div
@@ -85,26 +109,67 @@ function Profile() {
         ))}
       </div>
 
-      <button className={`btn-primary ${saved ? 'success' : ''}`} onClick={handleSave}>
-        {saved ? 'Profile Saved!' : 'Save Profile'}
+      {status === 'error' && <p className="error-msg">Please fill all fields and select at least one skill.</p>}
+      {status === 'saved' && <p className="success-msg">Profile saved to database!</p>}
+
+      <button className="btn-primary" onClick={handleSave} disabled={loading}>
+        {loading ? 'Saving...' : 'Save Profile'}
       </button>
     </div>
   );
 }
 
-// ─── PROJECTS ───────────────────────────────────────
+// ─── PROJECTS ────────────────────────────────────────
 function Projects() {
-  const [projects, setProjects] = useState(PROJECTS);
+  const [projects, setProjects] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [title, setTitle] = useState('');
-  const [skills, setSkills] = useState('');
-  const [slots, setSlots] = useState('');
+  const [description, setDescription] = useState('');
+  const [selectedSkills, setSelectedSkills] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
+  const [status, setStatus] = useState('');
 
-  const addProject = () => {
-    if (!title.trim()) return;
-    setProjects(prev => [...prev, { id: Date.now(), title, skills, members: 1, slots: parseInt(slots) || 3, owner: 'You' }]);
-    setTitle(''); setSkills(''); setSlots('');
-    setShowForm(false);
+  const fetchProjects = async () => {
+    setFetching(true);
+    try {
+      const res = await fetch(`${API}/getProjects`);
+      const data = await res.json();
+      setProjects(data);
+    } catch {
+      setProjects([]);
+    }
+    setFetching(false);
+  };
+
+  useEffect(() => { fetchProjects(); }, []);
+
+  const toggleSkill = (skill) =>
+    setSelectedSkills(prev =>
+      prev.includes(skill) ? prev.filter(s => s !== skill) : [...prev, skill]
+    );
+
+  const addProject = async () => {
+    if (!title.trim() || !description.trim() || selectedSkills.length === 0) {
+      setStatus('error'); return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/createProject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, description, skillsRequired: selectedSkills }),
+      });
+      const data = await res.json();
+      if (data.id) {
+        setTitle(''); setDescription(''); setSelectedSkills([]);
+        setShowForm(false); setStatus('');
+        fetchProjects();
+      }
+    } catch {
+      setStatus('error');
+    }
+    setLoading(false);
   };
 
   return (
@@ -122,119 +187,191 @@ function Projects() {
       {showForm && (
         <div className="form-card">
           <input className="input" placeholder="Project Title" value={title} onChange={e => setTitle(e.target.value)} />
-          <input className="input" placeholder="Skills needed (e.g. React, ML)" value={skills} onChange={e => setSkills(e.target.value)} />
-          <input className="input" placeholder="Open slots (e.g. 3)" value={slots} onChange={e => setSlots(e.target.value)} type="number" />
-          <button className="btn-primary" style={{ marginTop: 8 }} onClick={addProject}>Post Project</button>
+          <input className="input" placeholder="Description" value={description} onChange={e => setDescription(e.target.value)} style={{ marginTop: 10 }} />
+          <label className="label" style={{ marginTop: 12 }}>Skills Required</label>
+          <div className="skill-grid">
+            {SKILLS.map(skill => (
+              <div
+                key={skill}
+                className={`skill-chip ${selectedSkills.includes(skill) ? 'active' : ''}`}
+                onClick={() => toggleSkill(skill)}
+              >
+                {skill}
+              </div>
+            ))}
+          </div>
+          {status === 'error' && <p className="error-msg">Please fill all fields.</p>}
+          <button className="btn-primary" style={{ marginTop: 12 }} onClick={addProject} disabled={loading}>
+            {loading ? 'Posting...' : 'Post Project'}
+          </button>
         </div>
       )}
 
-      <div className="project-list">
-        {projects.map(p => (
-          <div className="project-card" key={p.id}>
-            <div className="project-card-top">
-              <span className="project-card-title">{p.title}</span>
-              <span className="badge">{p.members}/{p.slots} members</span>
+      {fetching ? (
+        <div className="loading"><div className="spinner">⚙️</div><div>Loading projects...</div></div>
+      ) : projects.length === 0 ? (
+        <div className="empty">No projects yet. Be the first to create one!</div>
+      ) : (
+        <div className="project-list">
+          {projects.map(p => (
+            <div className="project-card" key={p.id}>
+              <div className="project-card-top">
+                <span className="project-card-title">{p.title}</span>
+              </div>
+              <div className="project-card-skills">
+                {p.description && <div style={{ marginBottom: 6, color: '#ccc' }}>{p.description}</div>}
+                Skills: {Array.isArray(p.skillsRequired) ? p.skillsRequired.join(', ') : p.skillsRequired}
+              </div>
+              <div className="project-card-bottom">
+                <span className="project-card-owner"></span>
+                <button className="join-btn">Join Team</button>
+              </div>
             </div>
-            <div className="project-card-skills">Skills: {p.skills}</div>
-            <div className="project-card-bottom">
-              <span className="project-card-owner">Owner: {p.owner}</span>
-              <button className="join-btn">Join Team</button>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-// ─── AI MATCH ───────────────────────────────────────
+// ─── SKILL MATCH ─────────────────────────────────────
+function SkillMatch() {
+  const [selectedSkills, setSelectedSkills] = useState([]);
+  const [results, setResults] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const toggleSkill = (skill) =>
+    setSelectedSkills(prev =>
+      prev.includes(skill) ? prev.filter(s => s !== skill) : [...prev, skill]
+    );
+
+  const handleMatch = async () => {
+    if (selectedSkills.length === 0) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/match`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userSkills: selectedSkills }),
+      });
+      const data = await res.json();
+      setResults(data);
+    } catch {
+      setResults([]);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="page">
+      <h2 className="page-title">Skill Match</h2>
+      <p className="page-sub">Select your skills to find matching projects</p>
+
+      <label className="label">Your Skills</label>
+      <div className="skill-grid">
+        {SKILLS.map(skill => (
+          <div
+            key={skill}
+            className={`skill-chip ${selectedSkills.includes(skill) ? 'active' : ''}`}
+            onClick={() => toggleSkill(skill)}
+          >
+            {skill}
+          </div>
+        ))}
+      </div>
+
+      <button className="btn-primary" onClick={handleMatch} disabled={loading || selectedSkills.length === 0}>
+        {loading ? 'Matching...' : 'Find Matching Projects'}
+      </button>
+
+      {results !== null && (
+        <div style={{ marginTop: 28 }}>
+          <div className="section-label">
+            {results.length === 0 ? 'No matches found' : `${results.length} Matching Project(s)`}
+          </div>
+          <div className="project-list">
+            {results.map(p => (
+              <div className="project-card" key={p.id}>
+                <div className="project-card-top">
+                  <span className="project-card-title">{p.title}</span>
+                </div>
+                <div className="project-card-skills">
+                  {p.description && <div style={{ marginBottom: 6, color: '#ccc' }}>{p.description}</div>}
+                  Skills: {Array.isArray(p.skillsRequired) ? p.skillsRequired.join(', ') : p.skillsRequired}
+                </div>
+                <div className="project-card-bottom">
+                  <button className="join-btn">Join Team</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── AI TEAM BUILDER ─────────────────────────────────
 function AIMatch() {
-  const [goal, setGoal] = useState('');
+  const [idea, setIdea] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
-  const [approved, setApproved] = useState(false);
 
-  const handleMatch = () => {
-    if (!goal.trim()) return;
+  const handleBuild = async () => {
+    if (!idea.trim()) return;
     setLoading(true);
     setResult(null);
-    setApproved(false);
-    setTimeout(() => {
-      setLoading(false);
-      setResult({
-        message: 'Here is your suggested team for the hackathon! I have drafted intro messages for each member.',
-        roles: 'Frontend Lead · Backend Dev · Designer',
-        matches: [
-          { name: 'Priya S.', role: 'React Developer', match: '95%' },
-          { name: 'Rahul M.', role: 'Backend Node.js', match: '88%' },
-          { name: 'Sneha K.', role: 'UI/UX Designer', match: '82%' },
-        ],
-        nextSteps: ['Review profiles', 'Approve intro messages', 'Set up group chat'],
+    try {
+      const res = await fetch(`${API}/ai/build-team`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idea }),
       });
-    }, 2000);
+      const data = await res.json();
+      setResult(data.result);
+    } catch {
+      setResult('Could not connect to backend. Make sure server is running on port 5000.');
+    }
+    setLoading(false);
   };
 
   return (
     <div className="page">
       <div className="ai-header">
         <div className="ai-icon">🤖</div>
-        <div className="ai-title">AI Team Concierge</div>
-        <div className="ai-sub">Tell me your goal and I will find your team</div>
+        <div className="ai-title">AI Team Builder</div>
+        <div className="ai-sub">Describe your idea and AI will suggest your team</div>
       </div>
 
       <textarea
         className="ai-input"
-        placeholder="e.g. Build my team for a fintech hack (need React + backend + pitch)"
-        value={goal}
-        onChange={e => setGoal(e.target.value)}
+        placeholder="e.g. Build a fintech app that helps students manage expenses"
+        value={idea}
+        onChange={e => setIdea(e.target.value)}
       />
 
-      <button className="btn-primary" onClick={handleMatch}>Find My Team</button>
+      <button className="btn-primary" onClick={handleBuild} disabled={loading}>
+        {loading ? 'Building your team...' : 'Build My Team'}
+      </button>
 
       {loading && (
         <div className="loading">
           <div className="spinner">⚙️</div>
-          <div>AI is finding best matches...</div>
+          <div>AI is building your team...</div>
         </div>
       )}
 
       {result && !loading && (
-        <div style={{ marginTop: 24 }}>
-          <p className="result-msg">{result.message}</p>
-          <p className="result-roles">{result.roles}</p>
-
-          <div className="section-label">Suggested Members</div>
-          {result.matches.map((m, i) => (
-            <div className="member-card" key={i}>
-              <div>
-                <div className="member-name">{m.name}</div>
-                <div className="member-role">{m.role}</div>
-              </div>
-              <div className="match-pct">{m.match}</div>
-            </div>
-          ))}
-
-          <div className="section-label">Next Steps</div>
-          <div className="steps">
-            {result.nextSteps.map((s, i) => (
-              <div className="step" key={i}>- {s}</div>
-            ))}
-          </div>
-
-          <div className="trust-box">
-            <div className="trust-title">AI suggests — you decide</div>
-            <div className="trust-text">Review the matches above. Approve to send intro messages.</div>
-            <button className={`btn-primary ${approved ? 'success' : ''}`} onClick={() => setApproved(true)}>
-              {approved ? 'Messages Approved!' : 'Approve and Send Intros'}
-            </button>
-          </div>
+        <div className="result-box">
+          <div className="section-label">AI Recommendation</div>
+          <div className="ai-result">{result}</div>
         </div>
       )}
     </div>
   );
 }
 
-// ─── APP ────────────────────────────────────────────
+// ─── APP ─────────────────────────────────────────────
 export default function App() {
   const [page, setPage] = useState('home');
 
@@ -246,13 +383,15 @@ export default function App() {
           <button className={`nav-btn ${page === 'home' ? 'active' : ''}`} onClick={() => setPage('home')}>Home</button>
           <button className={`nav-btn ${page === 'profile' ? 'active' : ''}`} onClick={() => setPage('profile')}>Profile</button>
           <button className={`nav-btn ${page === 'projects' ? 'active' : ''}`} onClick={() => setPage('projects')}>Projects</button>
-          <button className={`nav-btn ${page === 'ai' ? 'active' : ''}`} onClick={() => setPage('ai')}>AI Match</button>
+          <button className={`nav-btn ${page === 'match' ? 'active' : ''}`} onClick={() => setPage('match')}>Skill Match</button>
+          <button className={`nav-btn ${page === 'ai' ? 'active' : ''}`} onClick={() => setPage('ai')}>AI Builder</button>
         </div>
       </nav>
 
       {page === 'home' && <Home setPage={setPage} />}
       {page === 'profile' && <Profile />}
       {page === 'projects' && <Projects />}
+      {page === 'match' && <SkillMatch />}
       {page === 'ai' && <AIMatch />}
 
       <div className="footer">SRMIST Hackathon 2026</div>
